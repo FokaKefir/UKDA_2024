@@ -50,9 +50,9 @@ type statetypes is (RDY, INIT, CALC_PID, SUM_PID, DIVIDE_KG, OVERLOAD, SIGN, SEN
 signal actual_state, next_state : statetypes;
 
 -- PID parameters
-signal Kp : integer := 10;
-signal Kd : integer := 20;
-signal Ki : integer := 1;
+signal Kp : integer := 1000;
+signal Kd : integer := 5;
+signal Ki : integer := 0;
 
 -- signals for calculations
 signal output_signed : signed(16 downto 0) := (others => '0');
@@ -112,7 +112,6 @@ begin
             d <= (others => '0');
         when INIT => 
             error_signed <= signed(error);
-            error_old := error_signed;
         when CALC_PID =>
             p <= Kp * error_signed;
             i <= Ki * (error_signed + error_old);
@@ -122,7 +121,6 @@ begin
         when DIVIDE_KG =>
             output_signed <= resize(inter / 2048, 17);
         when OVERLOAD =>
-            -- clamp out to 16-bit signed range -32768 to 32767
             if output_signed > to_signed(32767, 17) then
                 output_signed <= to_signed(32767, 17);
             elsif output_signed < to_signed(-32768, 17) then 
@@ -142,6 +140,7 @@ begin
             
         when SEND =>
             output <= output_carrier;
+            error_old := error_signed;
             
     end case;
 
