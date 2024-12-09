@@ -31,14 +31,13 @@ use IEEE.STD_LOGIC_SIGNED.ALL;
 --use UNISIM.VComponents.all;
 
 entity pwm_ultra is
-    Port ( src_clk : in  STD_LOGIC;
-           src_ce : in  STD_LOGIC;
-           reset : in  STD_LOGIC;
-		      start : in  STD_LOGIC;
-           h : in  STD_LOGIC_VECTOR (31 downto 0);
-			  min_val : in STD_LOGIC_VECTOR (31 downto 0);
-			  max_val : in STD_LOGIC_VECTOR (31 downto 0);
-           pwm_out : out  STD_LOGIC);
+    Port ( 	src_clk : in  STD_LOGIC;
+           	src_ce : in  STD_LOGIC;
+           	reset : in  STD_LOGIC;
+           	h : in  STD_LOGIC_VECTOR (15 downto 0);
+			min_val : in STD_LOGIC_VECTOR (15 downto 0);
+			max_val : in STD_LOGIC_VECTOR (15 downto 0);
+           	pwm_out : out  STD_LOGIC);
 end pwm_ultra;
 
 
@@ -48,7 +47,7 @@ type casee is(RDY,INIT,HIGH,LOW);
 signal actual_case : casee;
 signal next_case : casee;
 signal pwm_sig, pwm_next_sig : STD_LOGIC;
-signal counter, counter_next : STD_LOGIC_VECTOR(31 downto 0);
+signal counter, counter_next : STD_LOGIC_VECTOR(15 downto 0);
 
 begin
 
@@ -56,31 +55,26 @@ State_R:process(src_clk,reset)
 begin
 
     if reset = '1' then
-			actual_case<= RDY;
-			counter<=(others => '0');
-			pwm_sig<='0';
+			actual_case <= RDY;
+			counter <= (others => '0');
+			pwm_sig <= '0';
 	elsif (src_clk'event and src_clk='1') then
-			actual_case<=next_case;
-			counter<=counter_next;
-			pwm_sig<=pwm_next_sig;
+			actual_case <= next_case;
+			counter <= counter_next;
+			pwm_sig <= pwm_next_sig;
 	end if;
 
 end process State_R;
 
-next_case_log:process(actual_case, start,counter)
+next_case_log:process(actual_case, counter, h)
 begin
 
 case(actual_case) is
 	when RDY =>
-		if start='1'   
-			then
-				next_case<=INIT;
-			else
-				next_case<=RDY;
-		end if;
+		next_case<=INIT;
 		
 	when INIT =>
-		if counter <min_val
+		if counter < min_val
 			then
 				next_case<=INIT;
 			else
@@ -88,7 +82,7 @@ case(actual_case) is
 		end if;
 
 	when HIGH =>
-		if counter<(h+min_val)  	
+		if counter< (h+min_val)  	
 			then	
 				next_case<=HIGH;
 			else
@@ -106,15 +100,15 @@ case(actual_case) is
 end process next_case_log;
 
 WITH actual_case SELECT 
-counter_next<=(others => '0')WHEN RDY,
-					counter+1     WHEN others; 
+counter_next<=	(others => '0')	WHEN RDY,
+				counter + 1     WHEN others; 
 				
 				
 WITH actual_case SELECT
-pwm_next_sig<= '0' WHEN RDY,
-					'1' WHEN INIT,
-					'1' WHEN HIGH,
-					'0' WHEN LOW;
+pwm_next_sig<= 	'0' WHEN RDY,
+				'1' WHEN INIT,
+				'1' WHEN HIGH,
+				'0' WHEN LOW;
 
 
 pwm_out<=pwm_next_sig;
