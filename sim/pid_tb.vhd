@@ -106,7 +106,9 @@ process(mv_out_signal)
 begin
     if rising_edge(mv_out_signal) then
             if signed(error) > 0 then
-                error <= std_logic_vector(signed(error) - 100);
+                error <= std_logic_vector(signed(error) - 100 - signed(error) / 16);
+            else
+                error <= (others => '0');
         end if;
     end if;
 

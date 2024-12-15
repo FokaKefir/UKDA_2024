@@ -46,8 +46,8 @@ end PID;
 
 architecture Behavioral of PID is
 
-type statetypes is (RDY, INIT, CALC_PID, SUM_PID, DIVIDE_KG, OVERLOAD, SIGN, SEND);
-signal actual_state, next_state : statetypes;
+type statetypes is (RDY, INIT, CALC_PID, SUM_PID, DIVIDE_KG, OVERLOAD, SIGN, END_S);
+signal actual_state, next_state : statetypes := RDY;
 
 -- PID parameters
 signal Kp : integer := 1000;
@@ -59,7 +59,8 @@ signal output_signed : signed(16 downto 0) := (others => '0');
 signal inter : signed (31 downto 0) := (others => '0');
 signal error_signed : signed(15 downto 0) := (others => '0');
 signal p, i, d : signed(31 downto 0) := (others => '0');
-signal output_carrier : STD_LOGIC_VECTOR (15 downto 0);
+signal output_carrier : STD_LOGIC_VECTOR (15 downto 0) := (others => '0');
+signal dir_internal : STD_LOGIC_VECTOR(1 downto 0) := "00";
 
 begin
 
@@ -67,7 +68,7 @@ state_r : process(q_clk, src_reset)
 begin
     if src_reset = '1' then
         actual_state <= RDY;
-    elsif (q_clk'event and q_clk = '1') then
+    elsif rising_edge(q_clk) then
         actual_state <= next_state;
     end if;
 end process state_r;
@@ -92,8 +93,8 @@ begin
         when OVERLOAD =>
             next_state <= SIGN;
         when SIGN => 
-            next_state <= SEND;
-        when SEND =>
+            next_state <= END_S;
+        when END_S =>
             next_state <= RDY;
     end case;
 end process next_state_logic;
@@ -101,15 +102,10 @@ end process next_state_logic;
 process(actual_state)
     variable error_old : signed(15 downto 0) := (others => '0');
 begin
-
     case actual_state is
         when RDY =>
-            output_signed <= (others => '0');
-            error_signed <= (others => '0');
-            inter <= (others => '0');
-            p <= (others => '0');
-            i <= (others => '0');
-            d <= (others => '0');
+            
+            
         when INIT => 
             error_signed <= signed(error);
         when CALC_PID =>
@@ -129,21 +125,21 @@ begin
         when SIGN => 
             if output_signed = 0 then
                 output_carrier <= (others => '0');
-                dir <= "00";
+                dir_internal <= "00";
             elsif output_signed < 0 then
                 output_carrier <= std_logic_vector(-output_signed(15 downto 0));
-                dir <= "10";
+                dir_internal <= "10";
             else
                 output_carrier <= std_logic_vector(output_signed(15 downto 0));
-                dir <= "01";
+                dir_internal <= "01";
             end if;
-            
-        when SEND =>
-            output <= output_carrier;
+        when END_S =>
             error_old := error_signed;
-            
     end case;
-
 end process;
 
+output <= output_carrier;
+dir <= dir_internal;
+
 end Behavioral;
+
