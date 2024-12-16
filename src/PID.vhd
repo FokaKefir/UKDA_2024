@@ -50,9 +50,9 @@ type statetypes is (RDY, INIT, CALC_PID, SUM_PID, DIVIDE_KG, OVERLOAD, SIGN, END
 signal actual_state, next_state : statetypes := RDY;
 
 -- PID parameters
-signal Kp : integer := 1000;
-signal Kd : integer := 5;
-signal Ki : integer := 0;
+signal Kp : integer := 25;
+signal Kd : integer := 20;
+signal Ki : integer := 25;
 
 -- signals for calculations
 signal output_signed : signed(16 downto 0) := (others => '0');
@@ -104,8 +104,6 @@ process(actual_state)
 begin
     case actual_state is
         when RDY =>
-            
-            
         when INIT => 
             error_signed <= signed(error);
         when CALC_PID =>
@@ -115,7 +113,7 @@ begin
         when SUM_PID =>
             inter <= p + i + d;
         when DIVIDE_KG =>
-            output_signed <= resize(inter / 2048, 17);
+            output_signed <= resize(inter / 16, 17);
         when OVERLOAD =>
             if output_signed > to_signed(32767, 17) then
                 output_signed <= to_signed(32767, 17);
@@ -142,4 +140,3 @@ output <= output_carrier;
 dir <= dir_internal;
 
 end Behavioral;
-
