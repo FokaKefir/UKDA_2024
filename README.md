@@ -900,7 +900,7 @@ end Behavioral;
 
 ### Mintavételező és Órajel-osztó modul
 
-A szimuláció során tesztelt órajelosztó modul az órajel frekvenciáját a `div_val` bemeneti paraméter értékének megfelelően csökkenti. Ha például a `div_val` értéke 2, az osztó minden második felmenő él után ad ki egy órajelet, így az új órajel frekvenciája a bemeneti órajelhez képest $1/(2 \times \mathrm{div\_val})$ arányban lesz csökkentve.
+A szimuláció során tesztelt órajelosztó modul az órajel frekvenciáját a `div_val` bemeneti paraméter értékének megfelelően csökkenti. Ha például a `div_val` értéke 2, az osztó minden második felmenő él után ad ki egy órajelet, így az új órajel frekvenciája a bemeneti órajelhez képest $\verb|1/(2 *div_val)|$ arányban lesz csökkentve.
 
 A mintavételező modul az osztott órajel (`q_clk`) felmenő éleit figyeli, és az `period` bemeneti érték által meghatározott számú felmenő él után generál egy új mintavételi jelet az `mv_out_signal` kimeneten. Ez biztosítja, hogy a rendszer az előre megadott periódusidő szerint működjön.
 
@@ -974,7 +974,7 @@ A szimuláció során a bemeneti értékek széles skáláját vizsgáltuk, bele
 
 A tesztek eredménye alapján megerősítést nyert, hogy a modul:
 
-- Pontosan számolja ki a hibát a bemeneti jelek különbségeként $\texttt{exp\_turn} - \texttt{act\_turn}$
+- Pontosan számolja ki a hibát a bemeneti jelek különbségeként $\verb|exp_turn| - \verb|act_turn|$
 - Helyesen kezeli az előjeles számításokat, függetlenül attól, hogy a bemeneti értékek pozitívak, negatívak, vagy vegyesek.
 - Stabil működést biztosít extrém bemeneti értékek esetén is.
 
