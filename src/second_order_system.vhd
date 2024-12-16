@@ -38,8 +38,8 @@ entity second_order_system is
         -- Example stable system parameters:
         -- A1 ~ 0.6 (about 19660 in Q15), A2 ~ -0.2 (about -6553 in Q15), B ~ 0.25 (about 8192 in Q15)
         A1 : integer := 20000;   -- Approx 0.61 in Q15 scaling (20000/32768 ~ 0.61)
-        A2 : integer := -10000;  -- Approx -0.30 in Q15 scaling (-10000/32768 ~ -0.30)
-        B  : integer := 5000     -- Approx 0.15 in Q15 scaling (5000/32768 ~ 0.15)
+        A2 : integer := 10000;  -- Approx -0.30 in Q15 scaling (-10000/32768 ~ -0.30)
+        B  : integer := 2768     -- Approx 0.15 in Q15 scaling (5000/32768 ~ 0.15)
     );
     Port (
         q_clk    : in  std_logic;
@@ -79,9 +79,7 @@ begin
                 
                 -- Compute y(k+1):
                 -- y(k+1) = A1*y(k) + A2*y(k-1) + B*u(k)
-                temp := (to_integer(y_k)*A1)/32768 +
-                        (to_integer(y_km1)*A2)/32768 +
-                        (to_integer(input_val)*B)/32768;
+                temp := (to_integer(y_k) * A1 +to_integer(y_km1)*A2 + to_integer(input_val)*B)/32768;
 
                 -- Saturation to 15-bit range: [-16384, 16383]
                 if temp > 16383 then
