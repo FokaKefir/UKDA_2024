@@ -36,7 +36,7 @@ entity first_order_system is
     generic(
         -- A and B as Q15 parameters.
         A : integer := 30000;  -- Example pole factor, scaled as Q15
-        B : integer := 5000    -- Example gain factor, scaled as Q15
+        B : integer := 2768    -- Example gain factor, scaled as Q15
     );
     Port (
         q_clk    : in  std_logic;
@@ -73,7 +73,7 @@ begin
 
                 -- Compute next speed:
                 -- speed_next = (A/32768)*speed + (B/32768)*input_val
-                temp := (to_integer(speed)*A)/32768 + (to_integer(input_val)*B)/32768;
+                temp := (to_integer(speed) * A + to_integer(input_val) * B)/32768;
 
                 -- Saturate to 15-bit range: -16384 to +16383
                 if temp > 16383 then
@@ -90,4 +90,3 @@ begin
     sys_out <= speed;
 
 end Behavioral;
-
