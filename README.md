@@ -514,9 +514,11 @@ end Behavioral;
 
 A modul egy **elsőfokú rendszer** (first-order system) diszkrét implementációját tartalmazza. A viselkedését az **A** és **B** paraméterek határozzák meg, amelyeket fixpontos **Q15** formátumban adtak meg, azaz **32768** értékre skálázott számokkal számol a rendszer.
 
-$$
-\text{speed}_{\text{next}} = \frac{A}{32768} \cdot \text{speed}_{\text{current}} + \frac{B}{32768} \cdot \text{input\_val}
-$$
+<script type="text/javascript" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+<p>$$\text{speed}_{\text{next}} = \frac{A}{32768} \cdot \text{speed}_{\text{current}} + \frac{B}{32768} \cdot \text{input\_val}$$</p>
+
 
 Az **A** paraméter a rendszer dinamikáját határozza meg azáltal, hogy befolyásolja az állapot változásának sebességét, azaz a rendszer időállandóját.
 
@@ -972,7 +974,7 @@ A szimuláció során a bemeneti értékek széles skáláját vizsgáltuk, bele
 
 A tesztek eredménye alapján megerősítést nyert, hogy a modul:
 
-- Pontosan számolja ki a hibát a bemeneti jelek különbségeként $\text{exp\_turn} - \text{act\_turn}$
+- Pontosan számolja ki a hibát a bemeneti jelek különbségeként $\mathrm{exp\_turn} - \mathrm{act\_turn}$
 - Helyesen kezeli az előjeles számításokat, függetlenül attól, hogy a bemeneti értékek pozitívak, negatívak, vagy vegyesek.
 - Stabil működést biztosít extrém bemeneti értékek esetén is.
 
