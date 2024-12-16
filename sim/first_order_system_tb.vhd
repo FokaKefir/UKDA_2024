@@ -40,7 +40,7 @@ architecture Behavioral of first_order_system_tb is
     component first_order_system is
         generic(
             A : integer := 30000;
-            B : integer := 5000
+            B : integer := 2768
         );
         Port (
             q_clk    : in  std_logic;
@@ -65,8 +65,8 @@ begin
 
     UUT: first_order_system
         generic map(
-            A => 30000,  
-            B => 20000
+            A => 23000,  
+            B => 9768
         )
         port map(
             q_clk   => q_clk,
@@ -108,4 +108,3 @@ begin
     end process;
 
 end Behavioral;
-
