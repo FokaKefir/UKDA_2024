@@ -6,7 +6,7 @@
 
 **Tantárgy**: Újrakonfigurálható digitális áramkörök
 
-Projekt véglegesítésének időpontja: TODO
+**Projekt véglegesítésének időpontja**: 2024. 12. 17
 
 # Projekt célja
 
@@ -32,7 +32,36 @@ A fordulatszám-szabályozás alapvető jelentőségű számos ipari és kutatá
 1. **Fentről-le tervezés**: A rendszer fő funkcióit először nagy vonalakban lett megtervezve (PID, Encoder, PWM), majd részfeladatokra lettek bontva.
 2. **Modularitás**: Minden modul külön VHDL fájlban található, amely könnyen újrahasznosítható és tesztelhető.
 
-**TODO: tömbvázlat**
+### Tömvázlat
+
+```mermaid
+flowchart LR
+    CLK[Custom Clock Generator] -->|Clock Signal| PID
+    PID[PID Controller] -->|Control Signal| FirstOrderSystem
+    FirstOrderSystem[First Order System] -->|System Output| ErrorModule
+    ErrorModule[Error Calculation] -->|Error Signal| PID
+    MVSignal1[MV Signal - PID] -->|Trigger| PID
+    MVSignal2[MV Signal - System] -->|Trigger| FirstOrderSystem
+    PID -->|Direction| FirstOrderSystem
+    FirstOrderSystem -->|Feedback| ErrorModule
+
+```
+
+### Magyarázat
+
+1. **Clock (CLK):**
+    - Egy órajel-generátor (Custom Clock Generator) biztosítja az időzítést a PID modul és az elsőrendű rendszer számára.
+2. **PID Controller:**
+    - A PID szabályozó a hibajel alapján kiszámítja a vezérlőjelet.
+    - A kimeneti jel az elsőrendű rendszer bemeneteként szolgál.
+3. **First Order System:**
+    - Az elsőrendű rendszer megkapja a PID kimeneti jelét és generálja a rendszer kimenetét.
+4. **Error Calculation:**
+    - Az Error Module kiszámítja a hibajelet az elvárt és tényleges kimenet különbségeként, amely visszacsatolt bemenetként szolgál a PID számára.
+5. **MV Signal:**
+    - A PID és az elsőrendű rendszer mintavételezési jeleket kap a MV Signal modulokból.
+6. **Feedback:**
+    - A rendszer kimenete visszacsatolt bemenetként kerül az Error Module-hoz, amely továbbítja a hibát a PID szabályozóhoz.
 
 # Architektúra
 
@@ -164,7 +193,21 @@ end Behavioral;
 A megadott PID szabályozó (proporcionális-integrál-derivált) implementáció VHDL-ben három fő paraméterrel dolgozik:**Kp**, **Ki**, **Kd**. Ezek az egyes komponensek hozzájárulásait szabályozzák a szabályozó kimenetéhez, és meghatározzák a rendszer dinamikáját és stabilitását.
 
 $$
-\text{PID}_{\text{output}} = K_p \cdot e[k] + K_i \cdot \sum_{j=0}^k e[j] + K_d \cdot (e[k] - e[k-1])
+\Delta u[n] = u[n] - u[n-1] = K_p (e[n] - e[n-1]) + K_i e[n] + K_d (e[n] - 2e[n-1] + e[n-2])
+$$
+
+$$
+\Delta u[n] = (K_p + K_i + K_d) \cdot e[n] - (K_p + 2K_d) \cdot e[n-1] + (K_d) \cdot e[n-2]
+$$
+
+$$
+K_0 = K_p + K_i + K_d,\newline 
+K_1 = -(K_p + 2K_d),\newline 
+K_2 = K_d 
+$$
+
+$$
+u[n] = u[n-1] + K_0 \cdot e[n] + K_1 \cdot e[n-1] + K_2 \cdot e[n-2].
 $$
 
 - **e[k]**: a hibajel (error)
@@ -199,23 +242,31 @@ $$
 - **Jelentősége:**
     - A deriváló tag csillapítja a rendszer válaszát, megakadályozva a túlzott túllövést és az oszcillációt.
 
-
-**Állapotgép**:
-
-- **RDY**: Készenléti állapot.
-- **INIT**: Hibaszámítás inicializálása.
-- **CALC_PID**: A P, I, D komponensek számítása.
-- **SUM_PID**: Összegzés a PID komponensek alapján.
-- **DIVIDE_KG**: Kimeneti jel skálázása.
-- **OVERLOAD**: Túllépés kezelése.
-- **SIGN**: A kimeneti jel irányának meghatározása.
-- **SEND**: A kimeneti jel továbbítása.
-
 **Állapotdiagram**:
 
+```mermaid
+stateDiagram
+    RDY --> INIT
+    INIT --> CALC_PID
+    CALC_PID --> SUM_PID
+    SUM_PID --> DIVIDE_KG
+    DIVIDE_KG --> OVERLOAD
+    OVERLOAD --> SIGN
+    SIGN --> END_S
+    END_S --> RDY
+
 ```
-RDY -> INIT -> CALC_PID -> SUM_PID -> DIVIDE_KG -> OVERLOAD -> SIGN -> SEND -> RDY
-```
+
+| **Állapot** | **Feltétel** | **Következő állapot** | **Végrehajtott műveletek** |
+| --- | --- | --- | --- |
+| **RDY** | `start = '1'` | INIT | Nincs különösebb művelet. |
+| **INIT** | - | CALC_PID | Inicializálás: `error_signed <= signed(error)`. |
+| **CALC_PID** | - | SUM_PID | PID tagok számítása: `k_0 <= K0 * error_signed; k_1 <= K1 * error_old; k_2 <= K2 * error_old2`. |
+| **SUM_PID** | - | DIVIDE_KG | PID tagok összegzése: `inter <= k_0 + k_1 + k_2 + output_old`. |
+| **DIVIDE_KG** | - | OVERLOAD | Szorzás normálása: `output_signed <= resize(inter / 64, 17)`. |
+| **OVERLOAD** | - | SIGN | Túlcsordulás kezelése: Korlátozás **-32768, 32767** közé. |
+| **SIGN** | - | END_S | Kimeneti jel meghatározása: `output_carrier`, irány (`dir_internal`) beállítása. |
+| **END_S** | - | RDY | Állapotfrissítés: `error_old`, `error_old2`, és `output_old` frissítése az új értékekkel. |
 
 **VHDL**:
 
@@ -225,6 +276,12 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.numeric_std.all;
 
 entity PID is
+    generic(
+        -- PID parameters
+        Kp : integer := 250;
+        Kd : integer := 10;
+        Ki : integer := 100
+    );
     Port ( 
         q_clk : in STD_LOGIC;
         src_ce : in std_logic;
@@ -238,20 +295,21 @@ end PID;
 
 architecture Behavioral of PID is
 
-type statetypes is (RDY, INIT, CALC_PID, SUM_PID, DIVIDE_KG, OVERLOAD, SIGN, SEND);
-signal actual_state, next_state : statetypes;
-
--- PID parameters
-signal Kp : integer := 1000;
-signal Kd : integer := 5;
-signal Ki : integer := 0;
+type statetypes is (RDY, INIT, CALC_PID, SUM_PID, DIVIDE_KG, OVERLOAD, SIGN, END_S);
+signal actual_state, next_state : statetypes := RDY;
 
 -- signals for calculations
 signal output_signed : signed(16 downto 0) := (others => '0');
 signal inter : signed (31 downto 0) := (others => '0');
 signal error_signed : signed(15 downto 0) := (others => '0');
-signal p, i, d : signed(31 downto 0) := (others => '0');
-signal output_carrier : STD_LOGIC_VECTOR (15 downto 0);
+signal k_0, k_1, k_2 : signed(31 downto 0) := (others => '0');
+signal output_carrier : STD_LOGIC_VECTOR (15 downto 0) := (others => '0');
+signal dir_internal : STD_LOGIC_VECTOR(1 downto 0) := "00";
+
+-- PID values
+signal K0 : integer := Kp + Ki + Kd;
+signal K1 : integer := -(2 * Kd + Kp);
+signal K2 : integer := Kd;
 
 begin
 
@@ -259,7 +317,7 @@ state_r : process(q_clk, src_reset)
 begin
     if src_reset = '1' then
         actual_state <= RDY;
-    elsif (q_clk'event and q_clk = '1') then
+    elsif rising_edge(q_clk) then
         actual_state <= next_state;
     end if;
 end process state_r;
@@ -284,34 +342,29 @@ begin
         when OVERLOAD =>
             next_state <= SIGN;
         when SIGN => 
-            next_state <= SEND;
-        when SEND =>
+            next_state <= END_S;
+        when END_S =>
             next_state <= RDY;
     end case;
 end process next_state_logic;
 
 process(actual_state)
     variable error_old : signed(15 downto 0) := (others => '0');
+    variable error_old2 : signed(15 downto 0) := (others => '0');
+    variable output_old : signed(15 downto 0) := (others => '0');
 begin
-
     case actual_state is
         when RDY =>
-            output_signed <= (others => '0');
-            error_signed <= (others => '0');
-            inter <= (others => '0');
-            p <= (others => '0');
-            i <= (others => '0');
-            d <= (others => '0');
         when INIT => 
             error_signed <= signed(error);
         when CALC_PID =>
-            p <= Kp * error_signed;
-            i <= Ki * (error_signed + error_old);
-            d <= Kd * (error_signed - error_old);
+            k_0 <= K0 * error_signed;
+            k_1 <= K1 * error_old;
+            k_2 <= K2 * error_old2;
         when SUM_PID =>
-            inter <= p + i + d;
+            inter <= k_0 + k_1 + k_2 + output_old;
         when DIVIDE_KG =>
-            output_signed <= resize(inter / 2048, 17);
+            output_signed <= resize(inter / 64, 17);
         when OVERLOAD =>
             if output_signed > to_signed(32767, 17) then
                 output_signed <= to_signed(32767, 17);
@@ -321,38 +374,49 @@ begin
         when SIGN => 
             if output_signed = 0 then
                 output_carrier <= (others => '0');
-                dir <= "00";
+                dir_internal <= "00";
             elsif output_signed < 0 then
                 output_carrier <= std_logic_vector(-output_signed(15 downto 0));
-                dir <= "10";
+                dir_internal <= "10";
             else
                 output_carrier <= std_logic_vector(output_signed(15 downto 0));
-                dir <= "01";
+                dir_internal <= "01";
             end if;
-            
-        when SEND =>
-            output <= output_carrier;
-            error_old := error_signed;   
+        when END_S =>
+            output_old := output_signed(15 downto 0);
+            error_old2 := error_old;
+            error_old := error_signed;
     end case;
 end process;
+
+output <= output_carrier;
+dir <= dir_internal;
 
 end Behavioral;
 ```
 
 ## PWM generátor modul
 
-**Állapotgép**:
-
-- **RDY**: Indítás előtti készenléti állapot.
-- **INIT**: Kitöltési tényező inicializálása.
-- **HIGH**: PWM jel magas szintje.
-- **LOW**: PWM jel alacsony szintje.
-
 **Állapotdiagram:**
 
+```mermaid
+stateDiagram
+    RDY --> INIT
+    INIT --> HIGH
+    HIGH --> LOW
+    LOW --> RDY
+
 ```
-RDY -> INIT -> HIGH -> LOW -> RDY
-```
+
+| **Állapot** | **Feltétel** | **Következő állapot** | **Végrehajtott műveletek** |
+| --- | --- | --- | --- |
+| **RDY** | - | INIT | Kezdeti állapot, számláló (`counter`) nullázása. |
+| **INIT** | `counter < min_val` | INIT | Számlálás folytatása a minimális értékig. |
+|  | `counter >= min_val` | HIGH | PWM jel magas szintre állítása. |
+| **HIGH** | `counter < (h + min_val)` | HIGH | Számlálás folytatása a magas szintű szakaszban. |
+|  | `counter >= (h + min_val)` | LOW | PWM jel alacsony szintre állítása. |
+| **LOW** | `counter < max_val` | LOW | Számlálás folytatása az alacsony szintű szakaszban. |
+|  | `counter >= max_val` | RDY | Visszatérés az RDY állapotba, számláló nullázása. |
 
 **VHDL**:
 
@@ -363,12 +427,12 @@ use IEEE.STD_LOGIC_SIGNED.ALL;
 
 entity pwm_ultra is
     Port ( 	src_clk : in  STD_LOGIC;
-            src_ce : in  STD_LOGIC;
-            reset : in  STD_LOGIC;
-            h : in  STD_LOGIC_VECTOR (15 downto 0);
-         min_val : in STD_LOGIC_VECTOR (15 downto 0);
-         max_val : in STD_LOGIC_VECTOR (15 downto 0);
-            pwm_out : out  STD_LOGIC);
+           	src_ce : in  STD_LOGIC;
+           	reset : in  STD_LOGIC;
+           	h : in  STD_LOGIC_VECTOR (15 downto 0);
+			min_val : in STD_LOGIC_VECTOR (15 downto 0);
+			max_val : in STD_LOGIC_VECTOR (15 downto 0);
+           	pwm_out : out  STD_LOGIC);
 end pwm_ultra;
 
 architecture Behavioral of pwm_ultra is
@@ -385,14 +449,14 @@ State_R:process(src_clk,reset)
 begin
 
     if reset = '1' then
-         actual_case <= RDY;
-         counter <= (others => '0');
-         pwm_sig <= '0';
-   elsif (src_clk'event and src_clk='1') then
-         actual_case <= next_case;
-         counter <= counter_next;
-         pwm_sig <= pwm_next_sig;
-   end if;
+			actual_case <= RDY;
+			counter <= (others => '0');
+			pwm_sig <= '0';
+	elsif (src_clk'event and src_clk='1') then
+			actual_case <= next_case;
+			counter <= counter_next;
+			pwm_sig <= pwm_next_sig;
+	end if;
 
 end process State_R;
 
@@ -400,45 +464,45 @@ next_case_log:process(actual_case, counter, h)
 begin
 
 case(actual_case) is
-   when RDY =>
-      next_case<=INIT;
-      
-   when INIT =>
-      if counter < min_val
-         then
-            next_case<=INIT;
-         else
-            next_case<=HIGH;
-      end if;
+	when RDY =>
+		next_case<=INIT;
+		
+	when INIT =>
+		if counter < min_val
+			then
+				next_case<=INIT;
+			else
+				next_case<=HIGH;
+		end if;
 
-   when HIGH =>
-      if counter< (h+min_val)  	
-         then	
-            next_case<=HIGH;
-         else
-            next_case<=LOW;
-      end if;
-      
-   when LOW =>
-      if counter<max_val  
-         then
-            next_case<=LOW;
-         else
-            next_case<=RDY;
-      end if;
-   end case;
+	when HIGH =>
+		if counter< (h+min_val)  	
+			then	
+				next_case<=HIGH;
+			else
+				next_case<=LOW;
+		end if;
+		
+	when LOW =>
+		if counter<max_val  
+			then
+				next_case<=LOW;
+			else
+				next_case<=RDY;
+		end if;
+	end case;
 end process next_case_log;
 
 WITH actual_case SELECT 
 counter_next<=	(others => '0')	WHEN RDY,
-            counter + 1     WHEN others; 
-            
-            
+				counter + 1     WHEN others; 
+				
+				
 WITH actual_case SELECT
 pwm_next_sig<= 	'0' WHEN RDY,
-            '1' WHEN INIT,
-            '1' WHEN HIGH,
-            '0' WHEN LOW;
+				'1' WHEN INIT,
+				'1' WHEN HIGH,
+				'0' WHEN LOW;
 
 pwm_out<=pwm_next_sig;
 
@@ -474,8 +538,8 @@ use IEEE.NUMERIC_STD.ALL;
 entity first_order_system is
     generic(
         -- A and B as Q15 parameters.
-        A : integer := 30000;  -- Example pole factor
-        B : integer := 5000    -- Example gain factor
+        A : integer := 30000;  -- Example pole factor, scaled as Q15
+        B : integer := 2768    -- Example gain factor, scaled as Q15
     );
     Port (
         q_clk    : in  std_logic;
@@ -510,8 +574,9 @@ begin
                     when others => input_val <= (others => '0');    -- No torque
                 end case;
 
+                -- Compute next speed:
                 -- speed_next = (A/32768)*speed + (B/32768)*input_val
-                temp := (to_integer(speed)*A)/32768 + (to_integer(input_val)*B)/32768;
+                temp := (to_integer(speed) * A + to_integer(input_val) * B)/32768;
 
                 -- Saturate to 15-bit range: -16384 to +16383
                 if temp > 16383 then
@@ -564,9 +629,9 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity second_order_system is
     generic(
-        A1 : integer := 20000;   -- Approx 0.61 in Q15 scaling (20000/32768 ~ 0.61)
-        A2 : integer := -10000;  -- Approx -0.30 in Q15 scaling (-10000/32768 ~ -0.30)
-        B  : integer := 5000     -- Approx 0.15 in Q15 scaling (5000/32768 ~ 0.15)
+        A1 : integer := 20000;  
+        A2 : integer := 10000; 
+        B  : integer := 2768     
     );
     Port (
         q_clk    : in  std_logic;
@@ -604,10 +669,9 @@ begin
                     when others => input_val <= (others => '0');    -- no input
                 end case;
                 
+                -- Compute y(k+1):
                 -- y(k+1) = A1*y(k) + A2*y(k-1) + B*u(k)
-                temp := (to_integer(y_k)*A1)/32768 +
-                        (to_integer(y_km1)*A2)/32768 +
-                        (to_integer(input_val)*B)/32768;
+                temp := (to_integer(y_k) * A1 +to_integer(y_km1)*A2 + to_integer(input_val)*B)/32768;
 
                 -- Saturation to 15-bit range: [-16384, 16383]
                 if temp > 16383 then
@@ -637,11 +701,11 @@ end Behavioral;
 
 A rendszert teszteljük egységugrásra, hogy milyen választ ad és megfigyeljük, hogy az **A** és **B** paraméterek, hogy folyásolják be a rendszert:
 
-- Amennyiben **A=30000** és **B=2000** a rendszerünk lassan de stabilan áll be a végállapotba (1100ns).
+- Amennyiben **A=30768** és **B=2000** a rendszerünk lassan de stabilan áll be a végállapotba (1000ns, 20ns órajelre, 50 db impulzus).
     
     ![image.png](image.png)
     
-- Amennyiben **A=20000** és **B=8000** a rendszer hamar beáll a végállapotba, viszont nagyon érzékeny lesz a bemenetre (350ns)
+- Amennyiben **A=25768** és **B=7000** a rendszer hamar beáll a végállapotba, viszont nagyon érzékeny lesz a bemenetre (300ns, 20ns órajel, 15 db impulzus)
     
     ![image.png](image%201.png)
     
@@ -678,7 +742,7 @@ architecture Behavioral of first_order_system_tb is
     signal enable  : std_logic := '1';
     signal sys_in : signed(15 downto 0) := (others => '0');
     signal dir     : std_logic_vector(1 downto 0) := "00";
-    signal sys_out : signed(14 downto 0);  
+    signal sys_out : signed(14 downto 0);  -- 15-bit output
 
     constant CLK_PERIOD : time := 20 ns;
 
@@ -686,8 +750,8 @@ begin
 
     UUT: first_order_system
         generic map(
-            A => 30000,  
-            B => 2000
+            A => 25768,  
+            B => 7000
         )
         port map(
             q_clk   => q_clk,
@@ -712,7 +776,7 @@ begin
     begin
         -- Initially hold reset for 100 ns
         wait for 100 ns; 
-        reset <= '0'; 
+        reset <= '0';  -- Release reset after 100 ns
 
         -- Wait a bit before applying the step input
         wait for 200 ns;
@@ -729,17 +793,18 @@ begin
     end process;
 
 end Behavioral;
+
 ```
 
 ### Másodrendű rendszer
 
 A rendszert teszteljük egységugrásra, hogy milyen választ ad és megfigyeljük, hogy az **A1, A2** és **B** paraméterek, hogy folyásolják be a rendszert:
 
-- Amennyiben **A1=25000**, **A2=-10000** és **B=5000** a rendszernek rövid a beállási ideje és az oszcilláció minimális.
+- Amennyiben **A1=30000**, **A2=-15000**és **B=17768** a rendszernek gyors a válaszideje és enyhe a túllövés, enyhe oszcilláció
     
     ![image.png](image%202.png)
     
-- Amennyiben **A1=20000**, **A2=10000** és **B=6000** a rendszernek lassú a válaszideje és növekszik a túllövés, túlzott oszcilláció
+- Amennyiben **A1=30000**, **A2=-5000** és **B=7768** a rendszernek rövid a beállási ideje és az oszcilláció minimális.
     
     ![image.png](image%203.png)
     
@@ -758,9 +823,9 @@ architecture Behavioral of second_order_system_tb is
 
     component second_order_system is
         generic(
-            A1 : integer := 20000;
-            A2 : integer := -10000;
-            B  : integer := 5000
+            A1 : integer;
+            A2 : integer;
+            B  : integer
         );
         Port (
             q_clk    : in  std_logic;
@@ -786,8 +851,8 @@ begin
     UUT: second_order_system
         generic map(
             A1 => 30000,   
-            A2 => -10000,  
-            B  => 2000
+            A2 => -15000,  
+            B  => 17768
         )
         port map(
             q_clk   => q_clk,
@@ -818,7 +883,7 @@ begin
         wait for 200 ns;
 
         -- Apply a step: For example, set sys_in to 1000 and direction forward
-        sys_in <= to_signed(2000, 16);
+        sys_in <= to_signed(1000, 16);
         dir <= "01";  -- forward
 
         -- Let the system run and observe how sys_out changes over time.
@@ -831,6 +896,636 @@ begin
 end Behavioral;
 ```
 
+### Mintavételező és Órajel-osztó modul
+
+A szimuláció során tesztelt órajelosztó modul az órajel frekvenciáját a `div_val` bemeneti paraméter értékének megfelelően csökkenti. Ha például a `div_val` értéke 2, az osztó minden második felmenő él után ad ki egy órajelet, így az új órajel frekvenciája a bemeneti órajelhez képest $1/(2 \times \text{div\_val})$ arányban lesz csökkentve.
+
+A mintavételező modul az osztott órajel (`q_clk`) felmenő éleit figyeli, és az `period` bemeneti érték által meghatározott számú felmenő él után generál egy új mintavételi jelet az `mv_out_signal` kimeneten. Ez biztosítja, hogy a rendszer az előre megadott periódusidő szerint működjön.
+
+![image.png](image%204.png)
+
+**VHDL**:
+
+```vhdl
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity mv_signal_tb is
+end mv_signal_tb;
+
+architecture Behavioral of mv_signal_tb is
+
+component  custom_clk is
+    Port ( src_clk : in STD_LOGIC;
+           reset : in std_logic;
+           div_val : in STD_LOGIC_VECTOR (9 downto 0);
+           q_clk : out STD_LOGIC);
+end component;
+
+component MV_signal is       
+    port( q_clk : in std_logic;
+          reset : in std_logic;
+          period : in std_logic_vector(15 downto 0);
+          out_signal : out std_logic
+    );
+end component;
+
+           signal src_clk : STD_LOGIC := '0';
+           signal reset : std_logic;
+           signal div_val : STD_LOGIC_VECTOR (9 downto 0);
+           signal q_clk : STD_LOGIC;
+           signal period : std_logic_vector(15 downto 0);
+           signal mv_out_signal : std_logic;
+
+begin
+src_clk <= not src_clk after 5 ns;
+custom_clk_peldany: custom_clk
+    port map ( src_clk => src_clk,
+               reset => reset,
+               div_val => div_val,
+               q_clk => q_clk);
+
+mv_signal_peldany: mv_signal
+    port map ( q_CLK => q_clk,
+               reset => reset,
+               period => period,
+               out_signal => mv_out_signal
+    );   
+process
+
+begin
+    div_val <= "0000000010";
+    period <= "0000000000000100";
+    reset <= '1';
+    wait for 12 ns;
+    reset <= '0';
+    wait;
+end process;
+end Behavioral;
+```
+
+### Error modul
+
+A hibaszámító modul szimulációs tesztelése során mind pozitív, mind negatív bemeneti értékekkel próbáltuk ki a rendszert, hogy az előjeles számítások helyesek legyenek minden lehetséges bemeneti kombináció esetén. Ez a tesztelés különösen fontos volt annak érdekében, hogy a modul ne végezzen hibás műveleteket, amelyek hibás eredményeket adhatnának a PID szabályozó számára.
+
+A szimuláció során a bemeneti értékek széles skáláját vizsgáltuk, beleértve a pozitív és negatív értékeket, valamint a határértékeket is, például a legkisebb és legnagyobb megengedett előjeles számokat ($-2^{14}$ és $2^{14}-1$). Ezzel biztosítható, hogy a rendszer megfelelően működik a teljes működési tartományban, és elkerüli az előjeles számábrázolásból adódó hibákat, például túlcsordulást vagy alulcsordulást.
+
+A tesztek eredménye alapján megerősítést nyert, hogy a modul:
+
+- Pontosan számolja ki a hibát a bemeneti jelek különbségeként $\text{exp\_turn} - \text{act\_turn}$
+- Helyesen kezeli az előjeles számításokat, függetlenül attól, hogy a bemeneti értékek pozitívak, negatívak, vagy vegyesek.
+- Stabil működést biztosít extrém bemeneti értékek esetén is.
+
+Ez a megbízhatóság kritikus fontosságú, mivel a hibaszámítás közvetlenül befolyásolja a PID szabályozó működését és az egész rendszer szabályozási pontosságát.
+
+![image.png](image%205.png)
+
+**VHDL**:
+
+```vhdl
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity error_m_tb is
+end error_m_tb;
+
+architecture Behavioral of error_m_tb is
+    component error_m
+        Port ( exp_turn : in signed (14 downto 0);
+               act_turn : in signed (14 downto 0);
+               error_val : out signed (15 downto 0));
+    end component;
+
+    signal exp_turn : signed (14 downto 0);
+    signal act_turn : signed (14 downto 0);
+    signal error_val : signed (15 downto 0);
+
+begin
+    uut: error_m
+        Port map (
+            exp_turn => exp_turn,
+            act_turn => act_turn,
+            error_val => error_val
+        );
+
+    process
+    begin
+        exp_turn <= to_signed(100, 15);
+        act_turn <= to_signed(50, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(-100, 15);
+        act_turn <= to_signed(-50, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(100, 15);
+        act_turn <= to_signed(-50, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(-100, 15);
+        act_turn <= to_signed(50, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(0, 15);
+        act_turn <= to_signed(0, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(16383, 15); -- 2^14 - 1
+        act_turn <= to_signed(0, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(-16384, 15); -- -2^14
+        act_turn <= to_signed(0, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(16383, 15);
+        act_turn <= to_signed(-16384, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(-16384, 15);
+        act_turn <= to_signed(16383, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(0, 15);
+        act_turn <= to_signed(0, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(16383, 15);
+        act_turn <= to_signed(16382, 15);
+        wait for 10 ns;
+
+        exp_turn <= to_signed(-16384, 15);
+        act_turn <= to_signed(-16383, 15);
+        wait for 10 ns;
+
+        wait;
+    end process;
+
+end Behavioral;
+```
+
+### PID
+
+A PID modul szimulációs tesztelése során különböző hibajel-szcenáriókat próbáltunk ki, hogy ellenőrizzük a szabályozó helyes működését minden lehetséges bemeneti kombináció esetén. A teszt során a hibajel dinamikusan változott, így a szimuláció jól modellezte a valós rendszerekben fellépő hibacsökkenést, túllövést, és csillapítást.
+
+A szimuláció során a bemeneti hibajel széles skáláját vizsgáltuk, beleértve pozitív, negatív és határérték közeli értékeket is. A hibajel szimulált változása egy csökkenő tendencia volt, amely lehetővé tette a deriváló tag időbeli csillapításának.
+
+A tesztek eredménye alapján megállapítható, hogy a modul:
+
+- **Pontosan kezeli a PID szabályozás komponenseit** (P, I, D), és a hibajel változását figyelembe véve számolja a kimenetet.
+- **Stabil működést biztosít** minden tesztelt bemeneti kombináció esetén, beleértve az extrém hibajeleket is.
+- **Túllövést generál**, amelyet a deriváló tag gyorsan csillapít, miközben a hibajel idővel nullára csökken.
+
+A szimulációk megerősítették, hogy a PID modul megbízhatóan működik a tesztelt környezetben, és a kimenet stabilan követi a hibajel dinamikus változásait. Ez biztosítja a rendszer szabályozási pontosságát és stabilitását valós körülmények között.
+
+![image.png](image%206.png)
+
+**VHDL**:
+
+```vhdl
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity pid_tb is
+end pid_tb;
+
+architecture Behavioral of pid_tb is
+
+component  custom_clk is
+    Port ( src_clk : in STD_LOGIC;
+           reset : in std_logic;
+           div_val : in STD_LOGIC_VECTOR (9 downto 0);
+           q_clk : out STD_LOGIC);
+end component;
+
+component MV_signal is       
+    port( q_clk : in std_logic;
+          reset : in std_logic;
+          period : in std_logic_vector(15 downto 0);
+          out_signal : out std_logic
+    );
+end component;
+
+component PID is
+    Port ( 
+        q_clk : in STD_LOGIC;
+        src_ce : in std_logic;
+        src_reset : in std_logic;
+        start : in std_logic;
+        error : in STD_LOGIC_VECTOR (15 downto 0);   
+        output : out STD_LOGIC_VECTOR (15 downto 0);
+        dir : out std_logic_vector (1 downto 0)
+    );
+end component;
+
+    -- Signals for the PID module
+    signal q_clk : std_logic := '0';
+    signal src_ce : std_logic := '1';
+    signal reset : std_logic := '1';
+    signal error : std_logic_vector(15 downto 0) := std_logic_vector(to_signed(2000, 16));
+    signal output : std_logic_vector(15 downto 0);
+    signal dir : std_logic_vector(1 downto 0);
+
+    signal src_clk : STD_LOGIC := '0';
+    signal period : std_logic_vector(15 downto 0);
+    signal div_val : STD_LOGIC_VECTOR (9 downto 0);
+    signal mv_out_signal : std_logic := '0';
+
+begin
+
+    src_clk <= not src_clk after 5 ns;
+    
+    custom_clk_uut: custom_clk
+        port map ( src_clk => src_clk,
+                   reset => reset,
+                   div_val => div_val,
+                   q_clk => q_clk);
+
+    mv_signal_uut: mv_signal
+        port map ( q_clk => q_clk,
+                   reset => reset,
+                   period => period,
+                   out_signal => mv_out_signal
+        ); 
+
+    -- Instantiate the PID module
+    uut: PID
+        port map (
+            q_clk => q_clk,
+            src_ce => src_ce,
+            src_reset => reset,
+            start => mv_out_signal,
+            error => error,
+            output => output,
+            dir => dir
+        );
+
+div_val <= "0000000100";
+period <= "0000000000001010";
+
+reset <= '0' after 20ns;
+
+process(mv_out_signal)
+begin
+    if rising_edge(mv_out_signal) then
+            if signed(error) > 0 then
+                error <= std_logic_vector(signed(error) - 100 - signed(error) / 16);
+            else
+                error <= (others => '0');
+        end if;
+    end if;
+
+end process;
+
+end Behavioral;
+```
+
+### PID-PWM
+
+A PID-PWM tesztkörnyezet szimulációjában a PID modul kimeneti értékei alapján generáltunk PWM jelet. A hibajel (**error**) kezdetben pozitív értékről indult, majd folyamatosan csökkent, modellezve a deriváló tag csillapító hatását. A PID kimenet rövid túllövést mutatott, majd stabilizálódott, miközben a hibajel 0-hoz tartott.
+
+A PWM modul a PID kimeneti értékét impulzusszélesség-modulált jellé alakította, ahol a duty cycle a PID szabályozó eredményeivel arányosan változott. A szimuláció során megfigyelhető volt, hogy a PWM jel dinamikusan követte a PID kimenet változásait, miközben a rendszer stabil működést mutatott.
+
+A tesztkörnyezet sikeresen demonstrálta a PID és PWM modulok együttes helyes működését, beleértve a hibajel csökkenésének, a deriváló tag csillapításának és a kimeneti stabilizáció folyamatát.
+
+![Screenshot (1).png](Screenshot_(1).png)
+
+**VHDL**:
+
+```vhdl
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity pid_pwm_tb is
+end pid_pwm_tb;
+
+architecture Behavioral of pid_pwm_tb is
+
+component  custom_clk is
+    Port ( src_clk : in STD_LOGIC;
+           reset : in std_logic;
+           div_val : in STD_LOGIC_VECTOR (9 downto 0);
+           q_clk : out STD_LOGIC);
+end component;
+
+component MV_signal is       
+    port( q_clk : in std_logic;
+          reset : in std_logic;
+          period : in std_logic_vector(15 downto 0);
+          out_signal : out std_logic
+    );
+end component;
+
+component PID is
+    Port ( 
+        q_clk : in STD_LOGIC;
+        src_ce : in std_logic;
+        src_reset : in std_logic;
+        start : in std_logic;
+        error : in STD_LOGIC_VECTOR (15 downto 0);   
+        output : out STD_LOGIC_VECTOR (15 downto 0);
+        dir : out std_logic_vector (1 downto 0)
+    );
+end component;
+
+component pwm_ultra is
+    Port ( 	src_clk : in  STD_LOGIC;
+           	src_ce : in  STD_LOGIC;
+           	reset : in  STD_LOGIC;
+           	h : in  STD_LOGIC_VECTOR (15 downto 0);
+			min_val : in STD_LOGIC_VECTOR (15 downto 0);
+			max_val : in STD_LOGIC_VECTOR (15 downto 0);
+           	pwm_out : out  STD_LOGIC);
+end component;
+
+    -- Signals for the PID module
+    
+    signal q_clk : std_logic := '0';
+    signal src_ce : std_logic := '1';
+    signal reset : std_logic := '1';
+    signal error : std_logic_vector(15 downto 0) := std_logic_vector(to_signed(2000, 16));
+    signal output : std_logic_vector(15 downto 0) := "0000000000000000";
+    signal dir : std_logic_vector(1 downto 0);
+
+    signal src_clk : STD_LOGIC := '0';
+    signal period : std_logic_vector(15 downto 0);
+    signal div_val : STD_LOGIC_VECTOR (9 downto 0);
+    signal mv_out_signal : std_logic := '0';
+    
+    signal min_val : STD_LOGIC_VECTOR (15 downto 0) := "0000000000000001";
+		signal max_val : STD_LOGIC_VECTOR (15 downto 0) := "1111000000000000";
+    signal pwm_out :  STD_LOGIC;
+
+begin
+
+    src_clk <= not src_clk after 5 ns;
+    
+    custom_clk_uut: custom_clk
+        port map ( src_clk => src_clk,
+                   reset => reset,
+                   div_val => div_val,
+                   q_clk => q_clk);
+
+    mv_signal_uut: mv_signal
+        port map ( q_clk => q_clk,
+                   reset => reset,
+                   period => period,
+                   out_signal => mv_out_signal
+        ); 
+
+    -- Instantiate the PID module
+    pid_peldany: PID
+    port map (
+            q_clk => q_clk,
+            src_ce => src_ce,
+            src_reset => reset,
+            start => mv_out_signal,
+            error => error,
+            output => output,
+            dir => dir
+    );
+    
+    pwm_peldany: pwm_ultra
+    Port map ( 	
+        src_clk => src_clk,
+        src_ce => src_ce, 
+        reset => reset,
+        h => output,
+        min_val => min_val,
+	    max_val => max_val,
+        pwm_out => pwm_out
+    );
+        
+    
+
+div_val <= "0000000100";
+period <= "0000000000001010";
+
+reset <= '0' after 20ns;
+
+process(mv_out_signal)
+begin
+    if rising_edge(mv_out_signal) then
+            if signed(error) > 0 then
+                error <= std_logic_vector(signed(error) - 100 - signed(error) / 64);
+            else
+                error <= (others => '0');
+        end if;
+    end if;
+end process;
+
+end Behavioral;
+
+```
+
+### Elsőrendő rendszer PID szabályozóval
+
+Az elsőrendű rendszer és a PID szabályozó szimulációja során összehasonlítottuk a rendszer önálló működését és PID szabályozóval történő vezérlését. Az önálló rendszer (**A=30768**, **B=2000**) egységugrásra adott válaszában **50** impulzus alatt érte el a steady-state állapotot túllövés nélkül. A PID szabályozó (**Kp=150**, **Kd=50**, **Ki=300**) használatával a rendszer **20** impulzus alatt stabilizálódott, azonban egy **1289**-es túllövést tapasztaltunk, amelyet a deriváló tag gyorsan csillapított.
+
+A PID mintavételezési periódusa fele volt a rendszer periódusának, így elegendő idő állt rendelkezésre a rendszer reakciójához, és a szabályozás stabil maradt. A szimuláció megerősítette, hogy a PID jelentősen csökkenti a rendszer beállási idejét, miközben a túllövés minimális és jól kezelhető maradt.
+
+![image.png](image%207.png)
+
+**VHDL**:
+
+```vhdl
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity control_first_order_PID_tb is
+
+end control_first_order_PID_tb;
+
+architecture Behavioral of control_first_order_PID_tb is
+
+component  custom_clk is
+    Port ( src_clk : in STD_LOGIC;
+           reset : in std_logic;
+           div_val : in STD_LOGIC_VECTOR (9 downto 0);
+           q_clk : out STD_LOGIC);
+end component;
+
+component MV_signal is       
+    port( q_clk : in std_logic;
+          reset : in std_logic;
+          period : in std_logic_vector(15 downto 0);
+          out_signal : out std_logic
+    );
+end component;
+
+component error_m
+        Port ( exp_turn : in signed (14 downto 0);
+               act_turn : in signed (14 downto 0);
+               error_val : out signed (15 downto 0));
+end component;
+
+component first_order_system is
+        generic(
+            A : integer := 30000;
+            B : integer := 5000
+        );
+        Port (
+            q_clk    : in  std_logic;
+            reset    : in  std_logic;
+            enable   : in  std_logic;
+            sys_in  : in  signed(15 downto 0);    
+            dir      : in  std_logic_vector(1 downto 0);
+            sys_out  : out signed(14 downto 0)     
+        );
+    end component;
+
+component PID is
+    generic(
+        -- PID parameters
+        Kp : integer;
+        Kd : integer;
+        Ki : integer
+    );
+    Port ( 
+        q_clk : in STD_LOGIC;
+        src_ce : in std_logic;
+        src_reset : in std_logic;
+        start : in std_logic;
+        error : in STD_LOGIC_VECTOR (15 downto 0);   
+        output : out STD_LOGIC_VECTOR (15 downto 0);
+        dir : out std_logic_vector (1 downto 0)
+    );
+end component;
+
+    -- Signals for the PID module
+    
+    signal q_clk : std_logic := '0';
+    signal src_ce : std_logic := '1';
+    signal reset : std_logic := '1';
+    signal error : std_logic_vector(15 downto 0) := (others => '0');
+    signal output : std_logic_vector(15 downto 0) := "0000000000000000";
+    signal dir : std_logic_vector(1 downto 0);
+
+    signal src_clk : STD_LOGIC := '0';
+    signal period_pid : std_logic_vector(15 downto 0);
+    signal period_fo : std_logic_vector(15 downto 0);
+    signal div_val : STD_LOGIC_VECTOR (9 downto 0);
+    signal mv_out_fo : std_logic := '0';
+    signal mv_out_pid : std_logic := '0';
+    
+    signal sys_in : signed(15 downto 0) := (others => '0');
+    signal sys_out : signed(14 downto 0); 
+    
+    signal exp_turn : signed (14 downto 0);
+    signal error_val : signed (15 downto 0);
+
+begin
+
+    src_clk <= not src_clk after 10ns;
+    
+    custom_clk_uut: custom_clk
+        port map ( src_clk => src_clk,
+                   reset => reset,
+                   div_val => div_val,
+                   q_clk => q_clk);
+
+    mv_signal_pid: mv_signal
+        port map ( q_clk => q_clk,
+                   reset => reset,
+                   period => period_pid,
+                   out_signal => mv_out_pid
+        ); 
+        
+    mv_signal_fo: mv_signal
+        port map ( q_clk => q_clk,
+                   reset => reset,
+                   period => period_fo,
+                   out_signal => mv_out_fo
+        ); 
+    
+    sys_in <= signed(output);
+    
+    first_order_system_peldany: first_order_system
+        generic map(
+            A => 30768,  
+            B => 2000
+        )
+        port map(
+            q_clk   => mv_out_fo,
+            reset   => reset,
+            enable  => src_ce,
+            sys_in => sys_in,
+            dir     => dir,
+            sys_out => sys_out
+        );
+        
+     error_peldany: error_m
+        Port map (
+            exp_turn => exp_turn,
+            act_turn => sys_out,
+            error_val => error_val
+        );
+    
+    error <= std_logic_vector(error_val);
+
+    -- Instantiate the PID module
+    pid_peldany: PID
+    generic map(
+        Kp => 150,
+        Kd => 50,
+        Ki => 300
+    )
+    port map (
+            q_clk => q_clk,
+            src_ce => src_ce,
+            src_reset => reset,
+            start => mv_out_pid,
+            error => error,
+            output => output,
+            dir => dir
+    );
+
+stim_proc: process
+begin
+    div_val <= "0000000100";
+    period_pid <= "0000000000001010";
+    period_fo <= "0000000000000101";
+    exp_turn <= to_signed(1000, 15);
+    -- Initially hold reset for 100 ns
+    wait for 100 ns; 
+    reset <= '0';  -- Release reset after 100 ns
+
+    wait for 10000 ns;
+
+    -- Finish simulation
+    wait;
+end process;
+
+end Behavioral;
+```
+
 ## Tesztelés
 
 # Üzembe helyezés
+
+A rendszer üzembe helyezése kétféleképpen történhet, attól függően, hogy szimulációs környezetben vagy valós rendszerben kívánjuk használni:
+
+1. **Szimuláció alapú üzembe helyezés:**
+    
+    Az FPGA lapon szimulálható egy elsőfokú vagy másodfokú rendszer, amely lehetőséget nyújt a PID szabályozó paramétereinek finomhangolására. A proporcionális, integráló és deriváló tagok optimális értékei meghatározhatók a rendszer válaszának elemzésével, biztosítva a szabályozó megfelelő működését valós körülmények között is.
+    
+2. **Valós rendszer üzembe helyezése:**
+    
+    A rendszer valós hardverkörnyezetben is használható, ahol a beépített PWM modul lehetővé teszi egy H-híd vezérlését. Ebben az esetben a rendszer működésének ellenőrzéséhez szükség van a kiadott szabályozási jelre adott válasz visszaolvasására. Ennek érdekében használható egy encoder modul, amely pontosan méri a fordulatszámot, így lehetővé téve a visszacsatolt szabályozást és a rendszer valós idejű irányítását.
+    
+
+Az üzembe helyezés során figyelembe kell venni a rendszer paramétereit és a valós környezeti feltételeket, hogy a szabályozás hatékony és stabil legyen mind szimulációban, mind valós használat során.
+
+# Könyvészet
+
+- **Dorf, Richard C., and Robert H. Bishop.** *Modern Control Systems.* Pearson, 2016.
+- **FPGA Programming for Beginners.** *A Practical Introduction to FPGA Design and Development.* Packt Publishing, 2021.
+- **National Instruments.** "PID Theory Explained." *NI.com.* [https://www.ni.com](https://www.ni.com/).
+- **Xilinx.** *Vivado Design Suite User Guide.* Xilinx, 2023.
+- **Altera (Intel).** "FPGA Design for Control Applications."
+- **GitHub.** "PID Implementation in VHDL." *GitHub - pid-fpga-vhdl.* [https://github.com/deepc94/pid-fpga-vhdl](https://github.com/deepc94/pid-fpga-vhdl).
+- **Pololu.** "VNH5019 Motor Driver Carrier." *Pololu.* [https://www.pololu.com/product/1451](https://www.pololu.com/product/1451).
