@@ -515,7 +515,7 @@ end Behavioral;
 A modul egy **elsőfokú rendszer** (first-order system) diszkrét implementációját tartalmazza. A viselkedését az **A** és **B** paraméterek határozzák meg, amelyeket fixpontos **Q15** formátumban adtak meg, azaz **32768** értékre skálázott számokkal számol a rendszer.
 
 $$
-\text{speed}_{\text{next}} = \frac{A}{32768} \cdot \text{speed}_{\text{current}} + \frac{B}{32768} \cdot \text{input}_{\text{val}}
+speed_{next} = \frac{A}{32768} \cdot speed_{current} + \frac{B}{32768} \cdot input_{val}
 $$
 
 
