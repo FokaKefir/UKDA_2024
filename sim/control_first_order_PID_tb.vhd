@@ -75,6 +75,12 @@ component first_order_system is
     end component;
 
 component PID is
+    generic(
+        -- PID parameters
+        Kp : integer;
+        Kd : integer;
+        Ki : integer
+    );
     Port ( 
         q_clk : in STD_LOGIC;
         src_ce : in std_logic;
@@ -137,8 +143,8 @@ begin
     
     first_order_system_peldany: first_order_system
         generic map(
-            A => 22000,  
-            B => 10000
+            A => 30768,  
+            B => 2000
         )
         port map(
             q_clk   => mv_out_fo,
@@ -160,6 +166,11 @@ begin
 
     -- Instantiate the PID module
     pid_peldany: PID
+    generic map(
+        Kp => 150,
+        Kd => 50,
+        Ki => 300
+    )
     port map (
             q_clk => q_clk,
             src_ce => src_ce,
@@ -169,16 +180,14 @@ begin
             output => output,
             dir => dir
     );
-    
-
 
 
 stim_proc: process
 begin
     div_val <= "0000000100";
-    period_pid <= "0000000000101010";
-    period_fo <= "0000000000001010";
-    exp_turn <= to_signed(600, 15);
+    period_pid <= "0000000000001010";
+    period_fo <= "0000000000000101";
+    exp_turn <= to_signed(1000, 15);
     -- Initially hold reset for 100 ns
     wait for 100 ns; 
     reset <= '0';  -- Release reset after 100 ns
