@@ -514,10 +514,9 @@ end Behavioral;
 
 A modul egy **elsőfokú rendszer** (first-order system) diszkrét implementációját tartalmazza. A viselkedését az **A** és **B** paraméterek határozzák meg, amelyeket fixpontos **Q15** formátumban adtak meg, azaz **32768** értékre skálázott számokkal számol a rendszer.
 
-<script type="text/javascript" async
-    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
-</script>
-<p>$$\text{speed}_{\text{next}} = \frac{A}{32768} \cdot \text{speed}_{\text{current}} + \frac{B}{32768} \cdot \text{input\_val}$$</p>
+$$
+\mathrm{speed}_{\mathrm{next}} = \frac{A}{32768} \cdot \mathrm{speed}_{\mathrm{current}} + \frac{B}{32768} \cdot \mathrm{input\_val}
+$$
 
 
 Az **A** paraméter a rendszer dinamikáját határozza meg azáltal, hogy befolyásolja az állapot változásának sebességét, azaz a rendszer időállandóját.
