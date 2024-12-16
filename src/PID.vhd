@@ -33,6 +33,12 @@ use IEEE.numeric_std.all;
 --use UNISIM.VComponents.all;
 
 entity PID is
+    generic(
+        -- PID parameters
+        Kp : integer := 800;
+        Kd : integer := 100;
+        Ki : integer := 10
+    );
     Port ( 
         q_clk : in STD_LOGIC;
         src_ce : in std_logic;
@@ -49,18 +55,18 @@ architecture Behavioral of PID is
 type statetypes is (RDY, INIT, CALC_PID, SUM_PID, DIVIDE_KG, OVERLOAD, SIGN, END_S);
 signal actual_state, next_state : statetypes := RDY;
 
--- PID parameters
-signal Kp : integer := 25;
-signal Kd : integer := 20;
-signal Ki : integer := 25;
-
 -- signals for calculations
 signal output_signed : signed(16 downto 0) := (others => '0');
 signal inter : signed (31 downto 0) := (others => '0');
 signal error_signed : signed(15 downto 0) := (others => '0');
-signal p, i, d : signed(31 downto 0) := (others => '0');
+signal k_0, k_1, k_2 : signed(31 downto 0) := (others => '0');
 signal output_carrier : STD_LOGIC_VECTOR (15 downto 0) := (others => '0');
 signal dir_internal : STD_LOGIC_VECTOR(1 downto 0) := "00";
+
+-- PID values
+signal K0 : integer := Kp + Ki + Kd;
+signal K1 : integer := -(2 * Kd + Kp);
+signal K2 : integer := Kd;
 
 begin
 
@@ -101,19 +107,21 @@ end process next_state_logic;
 
 process(actual_state)
     variable error_old : signed(15 downto 0) := (others => '0');
+    variable error_old2 : signed(15 downto 0) := (others => '0');
+    variable output_old : signed(15 downto 0) := (others => '0');
 begin
     case actual_state is
         when RDY =>
         when INIT => 
             error_signed <= signed(error);
         when CALC_PID =>
-            p <= Kp * error_signed;
-            i <= Ki * (error_signed + error_old);
-            d <= Kd * (error_signed - error_old);
+            k_0 <= K0 * error_signed;
+            k_1 <= K1 * error_old;
+            k_2 <= K2 * error_old2;
         when SUM_PID =>
-            inter <= p + i + d;
+            inter <= k_0 + k_1 + k_2 + output_old;
         when DIVIDE_KG =>
-            output_signed <= resize(inter / 16, 17);
+            output_signed <= resize(inter / 64, 17);
         when OVERLOAD =>
             if output_signed > to_signed(32767, 17) then
                 output_signed <= to_signed(32767, 17);
@@ -132,6 +140,8 @@ begin
                 dir_internal <= "01";
             end if;
         when END_S =>
+            output_old := output_signed(15 downto 0);
+            error_old2 := error_old;
             error_old := error_signed;
     end case;
 end process;
