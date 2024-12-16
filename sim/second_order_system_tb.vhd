@@ -40,8 +40,8 @@ architecture Behavioral of second_order_system_tb is
     component second_order_system is
         generic(
             A1 : integer := 20000;
-            A2 : integer := -10000;
-            B  : integer := 5000
+            A2 : integer := 10000;
+            B  : integer := 2768
         );
         Port (
             q_clk    : in  std_logic;
@@ -66,9 +66,9 @@ begin
 
     UUT: second_order_system
         generic map(
-            A1 => 25000,   
-            A2 => -10000,  
-            B  => 5000
+            A1 => 30000,   
+            A2 => -15000,  
+            B  => 17768
         )
         port map(
             q_clk   => q_clk,
@@ -110,4 +110,3 @@ begin
     end process;
 
 end Behavioral;
-
