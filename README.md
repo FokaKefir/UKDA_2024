@@ -974,7 +974,7 @@ A szimuláció során a bemeneti értékek széles skáláját vizsgáltuk, bele
 
 A tesztek eredménye alapján megerősítést nyert, hogy a modul:
 
-- Pontosan számolja ki a hibát a bemeneti jelek különbségeként $\mathrm{exp\_turn} - \mathrm{act\_turn}$
+- Pontosan számolja ki a hibát a bemeneti jelek különbségeként $\texttt{exp\_turn} - \texttt{act\_turn}$
 - Helyesen kezeli az előjeles számításokat, függetlenül attól, hogy a bemeneti értékek pozitívak, negatívak, vagy vegyesek.
 - Stabil működést biztosít extrém bemeneti értékek esetén is.
 
