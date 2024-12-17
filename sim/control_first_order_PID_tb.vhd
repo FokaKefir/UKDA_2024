@@ -193,7 +193,8 @@ begin
     reset <= '0';  -- Release reset after 100 ns
 
 
-    wait for 10000 ns;
+    wait for 26000 ns;
+    exp_turn <= to_signed(3000, 15);
 
     -- Finish simulation
     wait;
