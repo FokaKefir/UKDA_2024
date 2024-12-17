@@ -105,11 +105,17 @@ begin
     end case;
 end process next_state_logic;
 
-process(actual_state)
+process(actual_state, src_reset)
     variable error_old : signed(15 downto 0) := (others => '0');
     variable error_old2 : signed(15 downto 0) := (others => '0');
     variable output_old : signed(15 downto 0) := (others => '0');
 begin
+    if src_reset = '1' then
+        error_old := (others => '0');
+        error_old2 := (others => '0');
+        output_old := (others => '0');
+    end if;
+
     case actual_state is
         when RDY =>
         when INIT => 
