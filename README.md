@@ -8,6 +8,22 @@
 
 **Projekt véglegesítésének időpontja**: 2024. 12. 17
 
+| Feladat            | Pontszám |
+| ------------------ | -------- |
+| Jelenlét           | 10    	|
+| Általános          | 10    	|
+| Tervezés           | 10    	|
+| Mérések            | 9     	|
+| Dokumentáció össz. | 29    	|
+| Tervezés           | 10    	|
+| Implementálás      | 10    	|
+| Szimuláció         | 10    	|
+| Valós megvalósítás | 8     	|
+| Valós rendszer     | 8     	|
+| Projekt össz.      | 46       |
+| Kérdések           | XX       |
+| Összesen           | 85       |
+
 # Projekt célja
 
 A fordulatszám-szabályozás alapvető jelentőségű számos ipari és kutatási alkalmazásban, különösen olyan rendszerekben, ahol a precíz motorvezérlés elengedhetetlen. Ez a projekt egy PID szabályozó alapú FPGA implementációt valósít meg, amely a motor fordulatszámának valós idejű szabályozására szolgál. A rendszer fő moduljai: **PID szabályozó**, és **PWM generátor, elsőrendű rendszer, másodrendűrendű rendszer**. Továbbá, egy **VIO modul** biztosítja a kívánt fordulatszám dinamikus beállítását.
